@@ -1,11 +1,17 @@
 package main
 
 import (
+	"log"
 	"net"
+	"os"
+)
+
+var (
+	InfoLogger  = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime)
+	ErrorLogger = log.New(os.Stderr, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 )
 
 func main() {
-	// You can use print statements as follows for debugging, they'll be visible when running tests.
 	InfoLogger.Println("Logs from your program will appear here!")
 
 	ln, err := net.Listen("tcp", "0.0.0.0:4221")
