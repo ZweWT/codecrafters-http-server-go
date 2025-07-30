@@ -3,21 +3,13 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"net"
 	"strings"
 )
-
-// Request represents an HTTP request
-type Request struct {
-	Method string
-	Path   string
-	Proto  string
-	// Headers map[string]string
-}
 
 // requestParser reads and parses an HTTP request from a connection
 func requestParser(reader *bufio.Reader) (*Request, error) {
 	// Read the first line of the HTTP request
+	// TODO: remove this request line and replace with readline from below.
 	requestLine, err := reader.ReadString('\n')
 	if err != nil {
 		return nil, fmt.Errorf("error reading request line: %w", err)
@@ -34,11 +26,36 @@ func requestParser(reader *bufio.Reader) (*Request, error) {
 	}
 
 	// Create and return a new Request object
-	return &Request{
-		Method: parsedRequestLine[0],
-		Path:   parsedRequestLine[1],
-		Proto:  parsedRequestLine[2],
-	}, nil
+	r := &Request{
+		Method:  parsedRequestLine[0],
+		Path:    parsedRequestLine[1],
+		Proto:   parsedRequestLine[2],
+		Headers: make(map[string]string),
+	}
+
+	for {
+		line, err := readLine(reader)
+		if err != nil {
+			ErrorLogger.Printf("Error reading headers: %v", err)
+			return nil, err
+		}
+		// Empty line signals the end of headers
+		if line == "" {
+			break
+		}
+		InfoLogger.Printf("header after line break %s", line)
+
+		parts := strings.SplitN(line, ":", 2)
+		if len(parts) == 2 {
+			key := strings.TrimSpace(parts[0])
+			value := strings.TrimSpace(parts[1])
+			// add into request.Header for each key and value
+			r.Headers[key] = value
+		}
+		InfoLogger.Printf("Header: %v", r.Headers)
+	}
+
+	return r, nil
 }
 
 // readLine reads a line from a bufio.Reader
@@ -47,21 +64,12 @@ func readLine(r *bufio.Reader) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	InfoLogger.Printf("readLine func only parse for headers: %s", line)
 
 	// Trim the trailing CRLF
 	return strings.TrimSuffix(line, "\r\n"), nil
 }
 
-// writeResponse writes an HTTP response to a connection
-func writeResponse(conn net.Conn, statusCode int, body string) error {
-	statusText := statusTextForCode(statusCode)
-	responseString := fmt.Sprintf("HTTP/1.1 %d %s\r\nContent-Type: text/plain\r\nContent-Length: %d\r\n\r\n%s",
-		statusCode, statusText, len(body), body)
-	_, err := conn.Write([]byte(responseString))
-	return err
-}
-
-// statusTextForCode returns the status text for a given HTTP status code
 func statusTextForCode(code int) string {
 	switch code {
 	case 200:

@@ -6,6 +6,9 @@ import (
 	"strings"
 )
 
+// router singleton
+var routerInstance *Router
+
 // handleConnection processes a single client connection
 func handleConnection(conn net.Conn) error {
 	// handle connection
@@ -18,53 +21,55 @@ func handleConnection(conn net.Conn) error {
 
 	// Parse the HTTP request
 	request, err := requestParser(r)
+	res := NewResponse(conn)
 	if err != nil {
 		ErrorLogger.Printf("Failed to parse the request: %v", err)
 		// Send a 400 Bad Request response
-		return writeResponse(conn, 400, "Bad Request")
+		res.SetStatus(400, "Bad Request")
+		res.SetBody("Bad Request")
+		return res.Write()
 	}
 
 	// Log the received request
 	InfoLogger.Printf("Request received: method=%s path=%s protocol=%s remote=%s",
 		request.Method, request.Path, request.Proto, conn.RemoteAddr())
 
-	// Skip the request headers
-	for {
-		line, err := readLine(r)
-		if err != nil {
-			ErrorLogger.Printf("Error reading headers: %v", err)
-			return err
-		}
-		// Empty line signals the end of headers
-		if line == "" {
-			break
-		}
-		InfoLogger.Printf("Header: %s", line)
-	}
+	router := getRouter()
+	err = router.ServeHTTP(request, res)
 
-	// Handle the request based on the method and path
-	var writeErr error
-	if request.Method == "GET" {
-		if request.Path == "/" {
-			// Root path returns a simple response
-			writeErr = writeResponse(conn, 200, "")
-		} else if strings.HasPrefix(request.Path, "/echo/") {
-			// Echo path returns the path component after /echo/
-			echoText := strings.TrimPrefix(request.Path, "/echo/")
-			writeErr = writeResponse(conn, 200, echoText)
-		} else {
-			// Any other path returns a 404 Not Found
-			writeErr = writeResponse(conn, 404, "Not Found")
-		}
-	} else {
-		// Non-GET methods return a 405 Method Not Allowed
-		writeErr = writeResponse(conn, 405, "Method Not Allowed")
-	}
-
-	if writeErr != nil {
-		ErrorLogger.Printf("Error writing response: %v", writeErr)
-		return writeErr
+	if err != nil {
+		ErrorLogger.Printf("Error serving HTTP: %v", err)
+		return err
 	}
 
 	return nil
+}
+
+func getRouter() *Router {
+	if routerInstance == nil {
+		routerInstance = NewRouter()
+
+		routerInstance.Handle("/", func(res ResponseWriter, req *Request) error {
+			res.SetStatus(200, "OK")
+			res.SetBody("")
+			return res.Write()
+		})
+
+		// Register echo handler
+		routerInstance.HandlePrefix("/echo/", func(res ResponseWriter, req *Request) error {
+			echoText := strings.TrimPrefix(req.Path, "/echo/")
+			res.SetStatus(200, "OK")
+			res.SetBody(echoText)
+			return res.Write()
+		})
+
+		routerInstance.Handle("/user-agent", func(res ResponseWriter, req *Request) error {
+			userAgent := req.Headers["User-Agent"]
+			res.SetStatus(200, "OK")
+			res.SetBody(userAgent)
+			return res.Write()
+		})
+	}
+
+	return routerInstance
 }
