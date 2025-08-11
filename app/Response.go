@@ -8,8 +8,8 @@ import (
 type ResponseWriter interface {
 	SetStatus(code int, text string)
 	SetHeader(key, value string)
-	SetBody(body string)
-	GetBody() string
+	SetBody(body []byte)
+	GetBody() []byte
 	Write() error
 }
 
@@ -17,7 +17,7 @@ type Response struct {
 	StatusCode int
 	StatusText string
 	Headers    map[string]string
-	Body       string
+	Body       []byte
 	conn       net.Conn
 }
 
@@ -45,11 +45,11 @@ func (r *Response) SetHeader(key, value string) {
 }
 
 // GetBody returns the response body
-func (r *Response) GetBody() string {
+func (r *Response) GetBody() []byte {
 	return r.Body
 }
 
-func (r *Response) SetBody(body string) {
+func (r *Response) SetBody(body []byte) {
 	r.Body = body
 }
 
@@ -62,17 +62,22 @@ func (r *Response) Write() error {
 	r.Headers["Content-Length"] = fmt.Sprintf("%d", len(r.Body))
 
 	// Build response string
-	responseString := fmt.Sprintf("HTTP/1.1 %d %s\r\n", r.StatusCode, r.StatusText)
+	headerString := fmt.Sprintf("HTTP/1.1 %d %s\r\n", r.StatusCode, r.StatusText)
 
 	// Add headers
 	for key, value := range r.Headers {
-		responseString += fmt.Sprintf("%s: %s\r\n", key, value)
+		headerString += fmt.Sprintf("%s: %s\r\n", key, value)
 	}
 
 	// Add empty line and body
-	responseString += "\r\n" + r.Body
+	headerString += "\r\n"
+
+	responseString := append([]byte(headerString), r.Body...)
 
 	// Write to connection
 	_, err := r.conn.Write([]byte(responseString))
-	return err
+	if err != nil {
+		return err
+	}
+	return nil
 }

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 )
@@ -10,7 +13,7 @@ type MockResponseWriter struct {
 	StatusCode int
 	StatusText string
 	Headers    map[string]string
-	Body       string
+	Body       []byte
 	WriteError error
 }
 
@@ -40,11 +43,11 @@ func (m *MockResponseWriter) Write() error {
 }
 
 // GetBody returns the response body
-func (m *MockResponseWriter) GetBody() string {
+func (m *MockResponseWriter) GetBody() []byte {
 	return m.Body
 }
 
-func (m *MockResponseWriter) SetBody(body string) {
+func (m *MockResponseWriter) SetBody(body []byte) {
 	m.Body = body
 }
 
@@ -54,7 +57,21 @@ func TestRouter(t *testing.T) {
 	router.HandlePrefix("/echo/", func(rw ResponseWriter, req *Request) error {
 		echoText := strings.TrimPrefix(req.Path, "/echo/")
 		rw.SetStatus(200, "OK")
-		rw.SetBody(echoText)
+		rw.SetBody([]byte(echoText))
+		return rw.Write()
+	})
+
+	router.HandlePrefix("/file/", func(rw ResponseWriter, req *Request) error {
+		fileName := strings.TrimPrefix(req.Path, "/file/")
+		path := fmt.Sprintf("tmp/%s", fileName)
+		contents, err := os.ReadFile(path)
+		if err != nil {
+			rw.SetStatus(404, "NOT FOUND")
+			return rw.Write()
+		}
+		rw.SetHeader("Content-Length", strconv.Itoa(len(contents)))
+		rw.SetBody(contents)
+		rw.SetStatus(200, "OK")
 		return rw.Write()
 	})
 
@@ -83,7 +100,7 @@ func TestRouter(t *testing.T) {
 				t.Errorf("Expected no error, got %v", err)
 			}
 
-			if rw.GetBody() != tt.expectedBody {
+			if string(rw.GetBody()) != tt.expectedBody {
 				t.Errorf("Expected boyd %q, got %q", tt.expectedBody, rw.GetBody())
 			}
 

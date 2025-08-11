@@ -2,7 +2,10 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 )
 
@@ -26,7 +29,7 @@ func handleConnection(conn net.Conn) error {
 		ErrorLogger.Printf("Failed to parse the request: %v", err)
 		// Send a 400 Bad Request response
 		res.SetStatus(400, "Bad Request")
-		res.SetBody("Bad Request")
+		res.SetBody([]byte("Bad Request"))
 		return res.Write()
 	}
 
@@ -51,7 +54,7 @@ func getRouter() *Router {
 
 		routerInstance.Handle("/", func(res ResponseWriter, req *Request) error {
 			res.SetStatus(200, "OK")
-			res.SetBody("")
+			res.SetBody([]byte(""))
 			return res.Write()
 		})
 
@@ -59,15 +62,34 @@ func getRouter() *Router {
 		routerInstance.HandlePrefix("/echo/", func(res ResponseWriter, req *Request) error {
 			echoText := strings.TrimPrefix(req.Path, "/echo/")
 			res.SetStatus(200, "OK")
-			res.SetBody(echoText)
+			res.SetBody([]byte(echoText))
 			return res.Write()
 		})
 
 		routerInstance.Handle("/user-agent", func(res ResponseWriter, req *Request) error {
 			userAgent := req.Headers["User-Agent"]
 			res.SetStatus(200, "OK")
-			res.SetBody(userAgent)
+			res.SetBody([]byte(userAgent))
 			return res.Write()
+		})
+
+		routerInstance.HandlePrefix("/files/", func(rw ResponseWriter, req *Request) error {
+			fileName := strings.TrimPrefix(req.Path, "/files/")
+			path := fmt.Sprintf("%s%s", FileDirectory, fileName)
+			InfoLogger.Printf("path: %s", path)
+			contents, err := os.ReadFile(path)
+			if err != nil {
+				ErrorLogger.Printf("reading file error: %s", err.Error())
+				rw.SetStatus(404, "Not Found")
+				return rw.Write()
+			}
+
+			rw.SetStatus(200, "OK")
+			rw.SetHeader("Content-Length", strconv.Itoa(len(contents)))
+			rw.SetHeader("Content-Type", "application/octet-stream")
+			rw.SetBody([]byte(contents))
+
+			return rw.Write()
 		})
 	}
 
