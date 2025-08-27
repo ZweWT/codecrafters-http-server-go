@@ -1,4 +1,4 @@
-package main
+package http
 
 // Common HTTP methods.
 // Unless otherwise noted, these are defined in RFC 7231 section 4.3.

@@ -1,10 +1,13 @@
 package main
 
 import (
+	"fmt"
 	"log"
-	"net"
 	"os"
+	"strconv"
 	"strings"
+
+	"github.com/codecrafters-io/http-server-starter-go/app/http"
 )
 
 var (
@@ -32,7 +35,7 @@ func main() {
 			ErrorLogger.Printf("error getting current directory: %s\n", err.Error())
 		}
 		InfoLogger.Printf("current path: %s\n", absolutePath)
-		
+
 		// If filePath is absolute, use it directly; otherwise, concatenate with current directory
 		if strings.HasPrefix(filePath, "/") {
 			FileDirectory = filePath
@@ -43,25 +46,54 @@ func main() {
 
 	InfoLogger.Printf("directory: %s\n", FileDirectory)
 
-	ln, err := net.Listen("tcp", "0.0.0.0:4221")
-	InfoLogger.Println("serving from port 4221")
-	if err != nil {
-		ErrorLogger.Fatalln("Failed to bind to port 4221")
+	serveMux := registerServeMux()
+	server := http.Server{
+		Addr:    ":4221",
+		Handler: serveMux,
 	}
 
-	for {
-		conn, err := ln.Accept()
+	log.Fatal(server.ListenAndServe())
+}
+
+func registerServeMux() *http.ServeMux {
+	serveMux := http.NewServeMux()
+	serveMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.SetStatus(200, "OK")
+		w.SetBody([]byte(""))
+		w.Write()
+	})
+
+	serveMux.HandleFunc("/echo/", func(w http.ResponseWriter, r *http.Request) {
+		echoText := strings.TrimPrefix(r.Path, "/echo/")
+		w.SetStatus(200, "OK")
+		w.SetBody([]byte(echoText))
+		w.Write()
+	})
+
+	serveMux.HandleFunc("/user-agent", func(w http.ResponseWriter, r *http.Request) {
+		userAgent := r.Header.Get("User-Agent")
+		w.SetStatus(200, "OK")
+		w.SetBody([]byte(userAgent))
+		w.Write()
+	})
+
+	serveMux.HandleFunc("/files", func(w http.ResponseWriter, r *http.Request) {
+		fileName := strings.TrimPrefix(r.Path, "/files/")
+		path := fmt.Sprintf("%s%s", FileDirectory, fileName)
+		InfoLogger.Printf("path: %s", path)
+		contents, err := os.ReadFile(path)
 		if err != nil {
-			ErrorLogger.Println("Failed to accept connection", err)
-			continue
+			ErrorLogger.Printf("reading file error: %s", err.Error())
+			w.SetStatus(404, "Not Found")
+			w.Write()
 		}
 
-		// other than net.conn, extra info such as file path where static file are stored
-		// should be passed here. by this, dynamic file location can be provided to users.
-		// am i over-thinking ?
-		// yes, as a http server module, it should be doing one thing only.
-		// (load-balancing can be introduced via others such as nginx)
-		// it should be handling http request through a lifecycle
-		go handleConnection(conn)
-	}
+		w.SetStatus(200, "OK")
+		w.SetHeader("Content-Length", strconv.Itoa(len(contents)))
+		w.SetHeader("Content-Type", "application/octet-stream")
+		w.SetBody([]byte(contents))
+		w.Write()
+	})
+
+	return serveMux
 }
