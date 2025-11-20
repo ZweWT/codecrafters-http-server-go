@@ -13,6 +13,7 @@ type ResponseWriter interface {
 	Write() error
 }
 
+// there is no reason for user to use Response type, as responseWriter will be used.
 type Response struct {
 	StatusCode int
 	StatusText string

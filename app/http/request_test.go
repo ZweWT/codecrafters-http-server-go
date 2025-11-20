@@ -27,10 +27,3 @@ func TestParseRequestLine(t *testing.T) {
 		}
 	}
 }
-
-var parseRequestErrorTest = []struct{}{}
-
-func TestParseRequestError(t *testing.T) {
-	for i, tt := range parseRequestErrorTest {
-	}
-}

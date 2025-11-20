@@ -30,6 +30,7 @@ type muxEntry struct {
 
 func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
 	h, _ := mux.findHandler(r)
+	fmt.Printf("found handler: %v\n", h)
 	if h == nil {
 		w.SetStatus(404, "Not Found")
 		w.SetBody([]byte("Not Found"))
@@ -42,12 +43,15 @@ func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
 func (mux *ServeMux) findHandler(r *Request) (h Handler, pattern string) {
 	path := r.Path
 	// exact keyword match
+	fmt.Printf("before keyword match for path finding: %s\n", path)
 	v, ok := mux.m[path]
+	fmt.Printf("found in keyword match: %t\n", ok)
 	if ok {
 		return v.h, v.pattern
 	}
 
 	for _, e := range mux.es {
+		fmt.Printf("matching with register route: %s\n", e.pattern)
 		// matches the longest parts first
 		if strings.HasPrefix(path, e.pattern) {
 			return e.h, e.pattern
@@ -74,8 +78,8 @@ func (mux *ServeMux) Handle(pattern string, handler Handler) {
 
 	// matches with prefix
 	// prefix the routes ends in /, i.e /echo/
-	if pattern[len(pattern)-1] == '/' {
-		appendSorted(mux.es, e)
+	if len(pattern) > 1 && pattern[len(pattern)-1] == '/' {
+		mux.es = appendSorted(mux.es, e)
 	}
 
 }
@@ -83,7 +87,7 @@ func appendSorted(es []muxEntry, e muxEntry) []muxEntry {
 	n := len(es)
 
 	i := sort.Search(n, func(i int) bool {
-		return len(es[i].pattern) < len(e.pattern)
+		return len(es[i].pattern) <= len(e.pattern)
 	})
 
 	if i == n {
@@ -115,6 +119,7 @@ func NewServeMux() *ServeMux {
 var defaultServeMux ServeMux
 var DefaultServeMux = &defaultServeMux
 
+// this allow to set defaultServeMux
 type serverHandler struct {
 	svr *Server
 }

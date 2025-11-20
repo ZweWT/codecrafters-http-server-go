@@ -52,6 +52,8 @@ func main() {
 		Handler: serveMux,
 	}
 
+	fmt.Printf("server mux : %v", serveMux)
+
 	log.Fatal(server.ListenAndServe())
 }
 
@@ -64,9 +66,16 @@ func registerServeMux() *http.ServeMux {
 	})
 
 	serveMux.HandleFunc("/echo/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Printf("echo route: %s", r.Path)
 		echoText := strings.TrimPrefix(r.Path, "/echo/")
 		w.SetStatus(200, "OK")
 		w.SetBody([]byte(echoText))
+		w.Write()
+	})
+
+	serveMux.HandleFunc("/echo/david", func(w http.ResponseWriter, r *http.Request) {
+		w.SetStatus(200, "OK")
+		w.SetBody([]byte("this is registerd echo david route"))
 		w.Write()
 	})
 
@@ -77,10 +86,19 @@ func registerServeMux() *http.ServeMux {
 		w.Write()
 	})
 
-	serveMux.HandleFunc("/files", func(w http.ResponseWriter, r *http.Request) {
+	serveMux.HandleFunc("/files/", func(w http.ResponseWriter, r *http.Request) {
 		fileName := strings.TrimPrefix(r.Path, "/files/")
 		path := fmt.Sprintf("%s%s", FileDirectory, fileName)
-		InfoLogger.Printf("path: %s", path)
+		fmt.Printf("path: %s", path)
+		if r.Method == "POST" {
+
+			// os.WriteFile(path, []byte("hello"), os.ModeDevice.Perm())
+			// w.SetStatus(200, "OK")
+			// w.SetHeader("Content-Length", strconv.Itoa(len(contents)))
+			// w.SetHeader("Content-Type", "application/octet-stream")
+			// w.SetBody([]byte(contents))
+			// w.Write()
+		}
 		contents, err := os.ReadFile(path)
 		if err != nil {
 			ErrorLogger.Printf("reading file error: %s", err.Error())

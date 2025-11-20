@@ -17,6 +17,8 @@ type Request struct {
 	Header Header
 }
 
+func badStringErr(what, val string) error { return fmt.Errorf("%s: %s", what, val) }
+
 func ReadRequest(b *bufio.Reader) (req *Request, err error) {
 	// textproto handle text which are basically in streams and parse accordingly with clrf
 	tp := textproto.NewReader(b)
@@ -29,20 +31,38 @@ func ReadRequest(b *bufio.Reader) (req *Request, err error) {
 	var ok bool
 	req.Method, req.Path, req.Proto, ok = parseRequestLine(requestLine)
 	if !ok {
-		return nil, fmt.Errorf("%s %q", "Malformed HTTP request", requestLine)
+		return nil, badStringErr("Malformed HTTP request", requestLine)
 	}
 	// validate method
 	if valid := isValidMethod(req.Method); !valid {
-		// return 400 bad request error
+		return nil, badStringErr("Malformed HTTP request", requestLine)
 	}
-	// parse proto and validate the proto major and minor
-	//
+
 	// PARSING HEADERs
 	mineHeaders, err := tp.ReadMIMEHeader()
 	if err != nil {
 		return nil, err
 	}
 	req.Header = Header(mineHeaders)
+	if len(req.Header["Host"]) > 1 {
+		return nil, fmt.Errorf("too many Host in header")
+	}
+
+	// 	// 1. Create a byte slice of the exact size needed.
+	// bodyBuffer := make([]byte, contentLength)
+
+	// // 2. Use io.ReadFull to read from your bufio.Reader 'b'
+	// //    and completely fill the bodyBuffer.
+	// _, err := io.ReadFull(b, bodyBuffer)
+	// if err != nil {
+	//     // This can happen if the client closes the connection
+	//     // or sends a body smaller than Content-Length.
+	//     return nil, err
+	// }
+
+	// // 3. At this point, bodyBuffer holds the request body.
+	// //    You can now assign it to your request struct.
+	// req.Body = bodyBuffer
 
 	return req, nil
 }
