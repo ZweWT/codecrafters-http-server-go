@@ -179,7 +179,7 @@ func (s *Server) handleConn(conn net.Conn) error {
 				return nil
 			}
 			fmt.Printf("error reading request: %s", err.Error())
-			res := NewResponse(conn)
+			res := NewResponse(conn, req)
 			if err == ErrBodyTooLarge {
 				res.SetStatus(413, "Payload Too Large")
 				res.SetBody([]byte("Payload Too Large"))
@@ -190,7 +190,7 @@ func (s *Server) handleConn(conn net.Conn) error {
 			return res.Write()
 		}
 
-		res := NewResponse(conn)
+		res := NewResponse(conn, req)
 		serverHandler{svr: s}.ServeHTTP(res, req)
 
 		if strings.ToLower(req.Header.Get("Connection")) == "close" {

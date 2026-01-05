@@ -3,6 +3,7 @@ package http
 import (
 	"fmt"
 	"net"
+	"strings"
 )
 
 type ResponseWriter interface {
@@ -22,13 +23,21 @@ type Response struct {
 	conn       net.Conn
 }
 
-func NewResponse(conn net.Conn) *Response {
-	return &Response{
+func NewResponse(conn net.Conn, req *Request) *Response {
+	res := &Response{
 		StatusCode: 200,
 		StatusText: "OK",
 		Headers:    make(map[string]string),
 		conn:       conn,
 	}
+
+	if req != nil && strings.ToLower(req.Header.Get("Connection")) == "close" {
+		res.SetHeader("Connection", "close")
+	} else {
+		res.SetHeader("Connection", "keep-alive")
+	}
+
+	return res
 }
 
 // SetStatus sets the status code and text
@@ -57,10 +66,14 @@ func (r *Response) SetBody(body []byte) {
 func (r *Response) Write() error {
 
 	if _, ok := r.Headers["Content-Type"]; !ok {
-		r.Headers["Content-Type"] = "text/plain"
+		r.SetHeader("Content-Type", "text/plain")
 	}
 
-	r.Headers["Content-Length"] = fmt.Sprintf("%d", len(r.Body))
+	if _, ok := r.Headers["Connection"]; !ok {
+		r.SetHeader("Connection", "keep-alive")
+	}
+
+	r.SetHeader("Content-Length", fmt.Sprintf("%d", len(r.Body)))
 
 	// Build response string
 	headerString := fmt.Sprintf("HTTP/1.1 %d %s\r\n", r.StatusCode, r.StatusText)
