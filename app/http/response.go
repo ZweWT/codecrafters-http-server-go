@@ -31,10 +31,16 @@ func NewResponse(conn net.Conn, req *Request) *Response {
 		conn:       conn,
 	}
 
-	if req != nil && strings.ToLower(req.Header.Get("Connection")) == "close" {
-		res.SetHeader("Connection", "close")
-	} else {
-		res.SetHeader("Connection", "keep-alive")
+	if req != nil {
+		if strings.ToLower(req.Header.Get("Connection")) == "close" {
+			res.SetHeader("Connection", "close")
+		} else {
+			res.SetHeader("Connection", "keep-alive")
+		}
+
+		if strings.ToLower(req.Header.Get("Accept-Encoding")) == "gzip" {
+			res.SetHeader("Content-Encoding", "gzip")
+		}
 	}
 
 	return res
