@@ -1,6 +1,8 @@
 package http
 
 import (
+	"bytes"
+	"compress/gzip"
 	"fmt"
 	"net"
 	"strings"
@@ -83,6 +85,14 @@ func (r *Response) Write() error {
 
 	if _, ok := r.Headers["Connection"]; !ok {
 		r.SetHeader("Connection", "keep-alive")
+	}
+
+	if r.Headers["Content-Encoding"] == "gzip" {
+		var b bytes.Buffer
+		w := gzip.NewWriter(&b)
+		w.Write(r.Body)
+		w.Close()
+		r.Body = b.Bytes()
 	}
 
 	r.SetHeader("Content-Length", fmt.Sprintf("%d", len(r.Body)))
