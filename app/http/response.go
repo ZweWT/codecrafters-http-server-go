@@ -38,8 +38,14 @@ func NewResponse(conn net.Conn, req *Request) *Response {
 			res.SetHeader("Connection", "keep-alive")
 		}
 
-		if strings.ToLower(req.Header.Get("Accept-Encoding")) == "gzip" {
-			res.SetHeader("Content-Encoding", "gzip")
+		if req.Header.Get("Accept-Encoding") != "" {
+			ae := strings.Split(req.Header.Get("Accept-Encoding"), ",")
+			for _, v := range ae {
+				if strings.TrimSpace(v) == "gzip" {
+					res.SetHeader("Content-Encoding", "gzip")
+					break
+				}
+			}
 		}
 	}
 
