@@ -176,8 +176,14 @@ func (s *Server) handleConn(conn net.Conn) error {
 	b := bufio.NewReader(conn)
 	req, err = ReadRequest(b)
 	if err != nil {
-		res.SetStatus(400, "Bad Request")
-		res.SetBody([]byte("Bad Request"))
+		fmt.Printf("error reading request: %s", err.Error())
+		if err == ErrBodyTooLarge {
+			res.SetStatus(413, "Payload Too Large")
+			res.SetBody([]byte("Payload Too Large"))
+		} else {
+			res.SetStatus(400, "Bad Request")
+			res.SetBody([]byte("Bad Request"))
+		}
 		return res.Write()
 	}
 	serverHandler{svr: s}.ServeHTTP(res, req)

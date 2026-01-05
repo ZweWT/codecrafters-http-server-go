@@ -3,11 +3,15 @@ package http
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net/textproto"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/http/httpguts"
 )
+
+const MAX_BODY_SIZE = 1024 * 1024
 
 // Request represents an HTTP request
 type Request struct {
@@ -15,9 +19,38 @@ type Request struct {
 	Path   string
 	Proto  string
 	Header Header
+	Body   []byte
 }
 
 func badStringErr(what, val string) error { return fmt.Errorf("%s: %s", what, val) }
+
+var ErrBodyTooLarge = fmt.Errorf("http: request body too large")
+
+type maxByteReader struct {
+	r io.Reader // underlying reader(bufio)
+	n int64     // bytes remaining allowed
+}
+
+// instead of count up approach(checking till max_body_size), this func uses preventive truncation.
+// this logic allow any attempt to read to further for violation ErrBodyTooLarge
+func (l *maxByteReader) Read(p []byte) (n int, err error) {
+	// violation check
+	if l.n <= 0 {
+		return 0, io.EOF
+	}
+
+	// if the caller asks more than n left, truncate till n(preventive truncation)
+	// why this is great?
+	// imagine l.n is 10 bytes, this prevents underlying reader from reading 11th byte.
+	// also ensures the limit is hit exactly at boundary.
+	if int64(len(p)) > l.n {
+		p = p[:l.n]
+	}
+
+	n, err = l.r.Read(p)
+	l.n -= int64(n)
+	return
+}
 
 func ReadRequest(b *bufio.Reader) (req *Request, err error) {
 	// textproto handle text which are basically in streams and parse accordingly with clrf
@@ -48,21 +81,26 @@ func ReadRequest(b *bufio.Reader) (req *Request, err error) {
 		return nil, fmt.Errorf("too many Host in header")
 	}
 
-	// 	// 1. Create a byte slice of the exact size needed.
-	// bodyBuffer := make([]byte, contentLength)
+	contentLength := req.Header.Get("Content-Length")
+	contentLengthInt, _ := strconv.Atoi(contentLength)
+	fmt.Printf("content length: %v and max body size: %v\n", contentLengthInt, MAX_BODY_SIZE)
+	if contentLengthInt > MAX_BODY_SIZE {
+		return nil, ErrBodyTooLarge
+	}
 
-	// // 2. Use io.ReadFull to read from your bufio.Reader 'b'
-	// //    and completely fill the bodyBuffer.
-	// _, err := io.ReadFull(b, bodyBuffer)
-	// if err != nil {
-	//     // This can happen if the client closes the connection
-	//     // or sends a body smaller than Content-Length.
-	//     return nil, err
-	// }
+	if contentLengthInt > 0 {
+		limitedReader := &maxByteReader{
+			r: b,
+			n: int64(contentLengthInt),
+		}
 
-	// // 3. At this point, bodyBuffer holds the request body.
-	// //    You can now assign it to your request struct.
-	// req.Body = bodyBuffer
+		buffer, err := io.ReadAll(limitedReader)
+		if err != nil {
+			fmt.Printf("error reading with limited reader: %s", err.Error())
+			return nil, err
+		}
+		req.Body = buffer
+	}
 
 	return req, nil
 }

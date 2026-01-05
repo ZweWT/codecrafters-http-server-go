@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -46,6 +47,11 @@ func main() {
 
 	InfoLogger.Printf("directory: %s\n", FileDirectory)
 
+	// if err := os.MkdirAll(FileDirectory, 0755); err != nil {
+	// 	ErrorLogger.Printf("error creating directory: %s\n", err.Error())
+	// 	os.Exit(1)
+	// }
+
 	serveMux := registerServeMux()
 	server := http.Server{
 		Addr:    ":4221",
@@ -87,30 +93,37 @@ func registerServeMux() *http.ServeMux {
 	})
 
 	serveMux.HandleFunc("/files/", func(w http.ResponseWriter, r *http.Request) {
-		fileName := strings.TrimPrefix(r.Path, "/files/")
-		path := fmt.Sprintf("%s%s", FileDirectory, fileName)
-		fmt.Printf("path: %s", path)
-		if r.Method == "POST" {
+		switch r.Method {
+		case "GET":
+			fileName := strings.TrimPrefix(r.Path, "/files/")
+			path := fmt.Sprintf("%s/%s", FileDirectory, fileName)
+			fmt.Printf("path: %s", path)
+			contents, err := os.ReadFile(path)
+			if err != nil {
+				ErrorLogger.Printf("reading file error: %s", err.Error())
+				w.SetStatus(404, "Not Found")
+				w.Write()
+			}
 
-			// os.WriteFile(path, []byte("hello"), os.ModeDevice.Perm())
-			// w.SetStatus(200, "OK")
-			// w.SetHeader("Content-Length", strconv.Itoa(len(contents)))
-			// w.SetHeader("Content-Type", "application/octet-stream")
-			// w.SetBody([]byte(contents))
-			// w.Write()
-		}
-		contents, err := os.ReadFile(path)
-		if err != nil {
-			ErrorLogger.Printf("reading file error: %s", err.Error())
-			w.SetStatus(404, "Not Found")
+			w.SetStatus(200, "OK")
+			w.SetHeader("Content-Length", strconv.Itoa(len(contents)))
+			w.SetHeader("Content-Type", "application/octet-stream")
+			w.SetBody([]byte(contents))
+			w.Write()
+
+		case "POST":
+			fileName := strings.TrimPrefix(r.Path, "/files/")
+			path := filepath.Join(FileDirectory, fileName)
+			err := os.WriteFile(path, r.Body, 0644)
+			if err != nil {
+				fmt.Printf("err: %s", err.Error())
+				w.SetStatus(500, "Internal Server Error")
+				w.Write()
+			}
+			w.SetStatus(201, "Created")
+			fmt.Println("before response write")
 			w.Write()
 		}
-
-		w.SetStatus(200, "OK")
-		w.SetHeader("Content-Length", strconv.Itoa(len(contents)))
-		w.SetHeader("Content-Type", "application/octet-stream")
-		w.SetBody([]byte(contents))
-		w.Write()
 	})
 
 	return serveMux
