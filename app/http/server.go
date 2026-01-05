@@ -3,6 +3,7 @@ package http
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"net"
 	"sort"
 	"strings"
@@ -168,26 +169,34 @@ func (s *Server) Serve(ln net.Listener) error {
 
 func (s *Server) handleConn(conn net.Conn) error {
 	defer conn.Close()
-	var err error
-
-	req := new(Request)
-	res := NewResponse(conn)
 
 	b := bufio.NewReader(conn)
-	req, err = ReadRequest(b)
-	if err != nil {
-		fmt.Printf("error reading request: %s", err.Error())
-		if err == ErrBodyTooLarge {
-			res.SetStatus(413, "Payload Too Large")
-			res.SetBody([]byte("Payload Too Large"))
-		} else {
-			res.SetStatus(400, "Bad Request")
-			res.SetBody([]byte("Bad Request"))
+
+	for {
+		req, err := ReadRequest(b)
+		if err != nil {
+			if err == io.EOF {
+				return nil
+			}
+			fmt.Printf("error reading request: %s", err.Error())
+			res := NewResponse(conn)
+			if err == ErrBodyTooLarge {
+				res.SetStatus(413, "Payload Too Large")
+				res.SetBody([]byte("Payload Too Large"))
+			} else {
+				res.SetStatus(400, "Bad Request")
+				res.SetBody([]byte("Bad Request"))
+			}
+			return res.Write()
 		}
-		return res.Write()
+
+		res := NewResponse(conn)
+		serverHandler{svr: s}.ServeHTTP(res, req)
+
+		if strings.ToLower(req.Header.Get("Connection")) == "close" {
+			return nil
+		}
 	}
-	serverHandler{svr: s}.ServeHTTP(res, req)
-	return err
 }
 
 func ListenAndServe(addr string, handler Handler) error {
