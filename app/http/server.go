@@ -7,6 +7,7 @@ import (
 	"net"
 	"sort"
 	"strings"
+	"sync"
 )
 
 type Handler interface {
@@ -20,6 +21,7 @@ func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) {
 }
 
 type ServeMux struct {
+	mu sync.RWMutex
 	m  map[string]muxEntry
 	es []muxEntry // sorted from longest to shortest for prefix routes
 }
@@ -42,6 +44,9 @@ func (mux *ServeMux) ServeHTTP(w ResponseWriter, r *Request) {
 }
 
 func (mux *ServeMux) findHandler(r *Request) (h Handler, pattern string) {
+	mux.mu.RLock()
+	defer mux.mu.RUnlock()
+
 	path := r.Path
 	// exact keyword match
 	fmt.Printf("before keyword match for path finding: %s\n", path)
@@ -63,6 +68,8 @@ func (mux *ServeMux) findHandler(r *Request) (h Handler, pattern string) {
 }
 
 func (mux *ServeMux) Handle(pattern string, handler Handler) {
+	mux.mu.Lock()
+	defer mux.mu.Unlock()
 	if _, exist := mux.m[pattern]; exist {
 		panic("multiple registration for same routes")
 	}
